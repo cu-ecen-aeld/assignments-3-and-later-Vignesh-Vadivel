@@ -7,11 +7,7 @@ if [ $# -ne 2 ]; then
     exit 1
 fi
 
-if [[ $writefile == *"/"* ]]; then
-    subpath="${writefile%/*}/"
-    echo "SUB_DIRECTORY"
-    mkdir -p "$subpath"
-fi
+subpath=$(dirname ${writefile})
+mkdir -p "$subpath"
 
-touch  "$writefile"
 echo "$writestr" > "$writefile"
