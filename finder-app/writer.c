@@ -51,6 +51,7 @@ int main(int argc, char* argv[]){
     openlog(NULL, 0, LOG_USER);                                                  // Open Log file //
     syslog(LOG_ERR, "File Descriptor failed with return -1\n\r");                // Log error message //
     closelog();                                                                  // Close Log file //
+    return 1;
   }
   return 0;
 }
