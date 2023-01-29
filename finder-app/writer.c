@@ -1,8 +1,11 @@
 
 /*
- *  Author : Vignesh Vadivel
- *  email  : viva9969@colorado.edu 
- *  Course : Advanced Embedded Software Development
+ *  
+ *  Author     : Vignesh Vadivel
+ *  email      : viva9969@colorado.edu 
+ *  Course     : Advanced Embedded Software Development
+ *  Assignment : 02
+ * 
  */
 
 /***************************************** HEADER_FILES *******************************************************/
