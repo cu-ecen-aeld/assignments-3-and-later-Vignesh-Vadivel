@@ -29,14 +29,23 @@ int main(int argc, char* argv[]){
     int i = strlen(argv[2]);                                                     // Calculate the total characters to be written into the file //
     int wr_status = write(fp, argv[2], i);                                       // Write into the file //
     openlog(NULL, 0, LOG_USER);                                                  // Open Log file //
-    if (wr_status==-1)                                                           // Check if the write action was succesfull //
+    if (wr_status==-1){                                                          // Check if the write action was succesfull //
       syslog(LOG_ERR, "Write Operation failed with return -1\n\r");
-    else if (wr_status < i)                                                      // Check if only partial number of bytes were written //
+      closelog();
+      close(fp);                                                                 // Close file descriptor //
+      return 1;
+    }
+    else if (wr_status < i){                                                     // Check if only partial number of bytes were written //
       syslog(LOG_ERR, "Not all bytes are written to the file W - \n\r");
-    else                                                                         // Successfull write operation //
+      closelog();
+      close(fp);                                                                 // Close file descriptor //
+      return 1;
+    }
+    else{                                                                        // Successfull write operation //
       syslog(LOG_DEBUG, "Write Operation is Successful \n\r");
-    closelog();                                                                  // Close Log file //
-    close(fp);                                                                   // Close file descriptor //
+      closelog();
+      close(fp);                                                                 // Close file descriptor //
+    }
   }
   else{
     openlog(NULL, 0, LOG_USER);                                                  // Open Log file //
