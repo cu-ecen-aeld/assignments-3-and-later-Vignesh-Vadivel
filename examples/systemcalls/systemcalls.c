@@ -1,3 +1,9 @@
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
 #include "systemcalls.h"
 
 /**
@@ -16,7 +22,8 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
-
+    if (system(cmd) != 0)                                       // Run the system function by passing the command //
+        return false;
     return true;
 }
 
@@ -58,7 +65,26 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    pid_t child_pid;
+    int wait_status;
 
+    child_pid = fork();
+    if (child_pid == -1){
+        return false;
+    }
+
+    if (child_pid == 0) {                                       // Execute child process //
+        if (execv(command[0], command) == -1){
+            exit(EXIT_FAILURE);
+        }
+    } else {                                                    // Execute parent process //
+        do {
+            if (waitpid(child_pid, &wait_status, 0) == -1)      // wait for child process to complete //
+                return false;
+            if (WEXITSTATUS(wait_status) != 0)
+                return false;
+        } while (!WIFEXITED(wait_status));
+    }
     va_end(args);
 
     return true;
@@ -92,7 +118,31 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
-
+    int fd = open(outputfile, O_WRONLY | O_CREAT, S_IRWXG | S_IRWXO | S_IRWXU);
+    
+    pid_t child_process_id;
+    int wait_status;
+    
+    child_process_id = fork();
+    if (child_process_id == -1){
+        close(fd);
+        return false;
+    }
+    if (child_process_id == 0){                                 // Execute child process //
+        dup2(fd, 1);
+        close(fd);
+        if (execv(command[0], command) == -1){
+            exit(EXIT_FAILURE);
+        }
+    }
+    else{                                                       // Execute parent process //
+        do {
+            if (waitpid(child_process_id, &wait_status, 0) ==-1)
+                return false;
+            if (WEXITSTATUS(wait_status) != 0)
+                return false;
+        }while(!WIFEXITED(wait_status));
+    }
     va_end(args);
 
     return true;
