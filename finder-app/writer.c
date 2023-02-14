@@ -14,6 +14,7 @@
 #include <stddef.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/stat.h>
 
 /***************************************** Main Function *******************************************************/
 int main(int argc, char* argv[]){
