@@ -283,7 +283,7 @@ int main(int argc, char* argv[])
   }
 
   /***************************** BIND ADDRESS *****************************/
-  returnStatus = bind(sockFd, res->ai_addr, sizeof(struct sockaddr));
+  returnStatus = bind(sockFd, res->ai_addr, res->ai_addrlen);
   if(returnStatus == STATUS_FAILURE){
     syslog(LOG_ERR, "bind() failed \r\n");
     myCustomExit();
