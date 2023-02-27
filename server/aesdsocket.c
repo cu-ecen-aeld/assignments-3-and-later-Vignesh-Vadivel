@@ -282,8 +282,8 @@ int main(int argc, char* argv[])
     syslog(LOG_INFO, "setsockopt() is successful \r\n");
   }
 
-  /***************************** CHECK BIND ERRORS *****************************/
-  returnStatus = bind(sockFd, res->ai_addr, res->ai_addrlen);
+  /***************************** BIND ADDRESS *****************************/
+  returnStatus = bind(sockFd, res->ai_addr, sizeof(struct sockaddr));
   if(returnStatus == STATUS_FAILURE){
     syslog(LOG_ERR, "bind() failed \r\n");
     myCustomExit();
@@ -299,7 +299,7 @@ int main(int argc, char* argv[])
   
   /**************************** DAEMON SUPPORT CHECK ***************************/
   if((argc != NUMBER_OF_ARGUMENTS)){
-    syslog(LOG_ERR, "ERROR: %d arguments expected, but passed = %d\r\n", NUMBER_OF_ARGUMENTS, argc);
+    syslog(LOG_INFO, " %d arguments expected, but passed = %d\r\n", NUMBER_OF_ARGUMENTS, argc);
   }
   else{
     if(strcmp(argv[1], "-d") == 0){
