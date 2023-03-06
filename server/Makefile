@@ -6,7 +6,8 @@
  # Use CROSS_COMPILE=aarch64-none-linux-gnu- to use ARM toolchain (default is gcc)
 CC ?= $(CROSS_COMPILE)gcc
  # Flags to treat all the errors as warnings
-FLAGS=-Wall -Werror
+CFLAGS = -g -Wall -Werror -lpthread
+LDFLAGS = -lpthread -lrt
 
 # writer recipe
 .PHONY : all
@@ -14,11 +15,11 @@ all: aesdsocket
 
 # Linking all the compiled object files
 aesdsocket: aesdsocket_o
-	$(CC) $(FLAGS)  aesdsocket.o -lrt -lpthread -o aesdsocket
+	$(CC) $(CFLAGS)  aesdsocket.o $(LDFLAGS) -o aesdsocket
 
 # Compiling the source files to generate object files
 aesdsocket_o:
-	$(CC) $(FLAGS) -c aesdsocket.c -Wall -Werror -g -o aesdsocket.o
+	$(CC) $(CFLAGS) -c aesdsocket.c -o aesdsocket.o
 
 # Clean the working directory
 .PHONY: clean
