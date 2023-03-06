@@ -6,8 +6,8 @@
  # Use CROSS_COMPILE=aarch64-none-linux-gnu- to use ARM toolchain (default is gcc)
 CC ?= $(CROSS_COMPILE)gcc
  # Flags to treat all the errors as warnings
-CFLAGS = -g -Wall -Werror -lpthread
-LDFLAGS = -lpthread -lrt
+CFLAGS ?= -g -Wall -Werror
+LDFLAGS ?= -pthread -lrt
 
 # writer recipe
 .PHONY : all
