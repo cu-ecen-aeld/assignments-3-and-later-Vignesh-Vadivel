@@ -14,11 +14,11 @@ all: aesdsocket
 
 # Linking all the compiled object files
 aesdsocket: aesdsocket_o
-	$(CC) $(FLAGS)  aesdsocket.o -o aesdsocket
+	$(CC) $(FLAGS)  aesdsocket.o -lrt -lpthread -o aesdsocket
 
 # Compiling the source files to generate object files
 aesdsocket_o:
-	$(CC) $(FLAGS) -c aesdsocket.c -o aesdsocket.o
+	$(CC) $(FLAGS) -c aesdsocket.c -Wall -Werror -g -o aesdsocket.o
 
 # Clean the working directory
 .PHONY: clean
