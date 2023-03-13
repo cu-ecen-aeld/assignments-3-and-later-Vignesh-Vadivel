@@ -43,7 +43,7 @@ Call trace:
 Code: d2800001 d2800000 d503233f d50323bf (b900003f)  
 ---[ end trace 4a4fba68da128785 ]---  
 
-The above is the analysis when we run the command => echo "hello_world" > /dev/faulty  
+**The above is the analysis when we run the command => echo "hello_world" > /dev/faulty**  
  + The main reason for the kernel failure is dereferencing a null pointer  
  + pgd p4d pud => are the active page tables  
  + The internal error we got is 0x96000045 => bit 0,2, 6 are set by the kernel  
@@ -54,7 +54,7 @@ The above is the analysis when we run the command => echo "hello_world" > /dev/f
  + Tainted:G A proprietary module was loaded  
 
 
-The call trace is in the reverse order  
+**The call trace is in the reverse order**  
  + faulty_write is the last function that is executed before the crash  
  + [faulty_write+0x14/0x20] => The instruction which caused the crash was in the address location (faulty_write)+0x14  
  + The instruction itself is 0x20 bytes long  
