@@ -48,7 +48,7 @@ Code: d2800001 d2800000 d503233f d50323bf (b900003f)
  + pgd p4d pud => are the active page tables  
  + The internal error we got is 0x96000045 => bit 0,2, 6 are set by the kernel  
  + We got a protection fault[0th bit is set]  
- + Instruction which writes to a memory location failed[6th bit is bit]  
+ + Instruction which writes to a memory location failed[6th bit is set]  
  + Modules linked in: hello(O) scull(O) faulty(O) => are the modules loaded before the crash happened  
  + CPU:0 denotes on which CPU the error occured  
  + Tainted:G A proprietary module was loaded  
