@@ -40,14 +40,20 @@
 #define PORT_FOR_SOCKET     "9000"
 #define FILE_PERMISSIONS    0744
 #define BACK_LOG            10
-#define SOCKET_PATH         "/var/tmp/aesdsocketdata"
 #define BUFFER_LENGTH       100
 #define STATUS_FAILURE      -1
 #define STATUS_SUCCESS       0
 #define NUMBER_OF_ARGUMENTS  2
 #define TIMESTAMP_LEN        256
 #define SLEEP_TIME_SEC       10
+#define USE_AESD_CHAR_DEVICE 1
 
+#if (USE_AESD_CHAR_DEVICE)
+#define SOCKET_PATH         "/dev/aesdchar"
+#else
+pthread_t time_thread;
+#define SOCKET_PATH         "/var/tmp/aesdsocketdata"
+#endif
 
 /******************************** GLOBAL VARIABLES ******************************/
 int sockFd, fileFd_W_R, clientFd;
@@ -95,7 +101,7 @@ void *getAddress(struct sockaddr *sadd){
   return &(((struct sockaddr_in*)sadd)->sin_addr);                                                 // For IPv4 //
 }
 
-
+#if (!USE_AESD_CHAR_DEVICE)
 /*
  * Function that would be ran as a separate thread to log time stamp values
  * Parameters  : None  => This thread function has no input parameters
@@ -127,7 +133,7 @@ void *logTimeStamp() {
   }
   return NULL;
 }
-
+#endif
 
 /*
  * Function to exit from a thread
@@ -357,6 +363,10 @@ void myCustomExit(){
       free(tNode);                                                                                 // Free Node //
     }
   }
+  
+#if (!USE_AESD_CHAR_DEVICE)
+  pthread_join(time_thread, NULL);
+#endif
   returnStatus = pthread_mutex_destroy(&mutexLock);                                                // Destroy mutex lock //
   if(returnStatus != STATUS_SUCCESS){
     syslog(LOG_ERR, "Mutex lock destroy failed \r\n");	
@@ -493,9 +503,9 @@ int main(int argc, char* argv[])
   }
   
   /**************************** START SOCKET SERVER ***************************/
-  
-  pthread_t time_thread;
+#if (!USE_AESD_CHAR_DEVICE)
   pthread_create(&time_thread, NULL, logTimeStamp, NULL);                                          // Run time stamp in a separate thread //
+#endif
   int retVal;
   retVal = mySocketServer();                                                                       // Returns zero on success //
   myCustomExit();
