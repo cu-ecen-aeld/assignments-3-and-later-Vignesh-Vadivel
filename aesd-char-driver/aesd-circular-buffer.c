@@ -15,7 +15,7 @@
 #endif
 
 #include "aesd-circular-buffer.h"
-
+const char* ptr = NULL;
 /**
  * @param buffer the buffer to search for corresponding offset.  Any necessary locking must be performed by caller.
  * @param char_offset the position to search for in the buffer list, describing the zero referenced
@@ -30,8 +30,9 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
             size_t char_offset, size_t *entry_offset_byte_rtn )
 {
     size_t curr_offset = 0;
-
-    for (size_t i = buffer->out_offs, j=0 ; ((i != buffer->in_offs) || buffer->full) && (j<10) ; j++)
+    size_t i = buffer->out_offs;
+    size_t j = 0;
+    for (; ((i != buffer->in_offs) || buffer->full) && (j<AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) ; j++)
     {
    
         if((curr_offset + buffer->entry[i].size) > char_offset)
@@ -52,11 +53,13 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 * Any necessary locking must be handled by the caller
 * Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
 */
-void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+const char* aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
     if((add_entry == NULL) || (buffer == NULL))                                    // Check for corner cases //
-        return;
-
+        return NULL;
+    if ((buffer->in_offs == buffer->out_offs) && (buffer->full == true)){
+      ptr = buffer->entry[buffer->in_offs].buffptr;
+    }
     buffer->entry[buffer->in_offs] = *add_entry;
     ++buffer->in_offs;
     if (buffer->in_offs == AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED){               // Wrap around condition //
@@ -66,6 +69,7 @@ void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const s
         buffer->out_offs = buffer->in_offs;
     }
     buffer->full = (buffer->in_offs == buffer->out_offs)?true:false;               // Update buffer full flag //
+    return ptr;
 }
 
 /**
