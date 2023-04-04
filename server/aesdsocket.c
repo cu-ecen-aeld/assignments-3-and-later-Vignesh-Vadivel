@@ -35,18 +35,20 @@
 
 /************************** LIBRARIES FROM THIS PROJECT ************************/
 #include "queue.h"
+#include "aesd_ioctl.h"
 
 /************************************* MACROS ***********************************/
-#define PORT_FOR_SOCKET     "9000"
-#define FILE_PERMISSIONS    0744
-#define BACK_LOG            10
-#define BUFFER_LENGTH       100
-#define STATUS_FAILURE      -1
-#define STATUS_SUCCESS       0
-#define NUMBER_OF_ARGUMENTS  2
-#define TIMESTAMP_LEN        256
-#define SLEEP_TIME_SEC       10
-#define USE_AESD_CHAR_DEVICE 1
+#define PORT_FOR_SOCKET       "9000"
+#define FILE_PERMISSIONS      0744
+#define BACK_LOG              10
+#define BUFFER_LENGTH         100
+#define STATUS_FAILURE        -1
+#define STATUS_SUCCESS         0
+#define NUMBER_OF_ARGUMENTS    2
+#define TIMESTAMP_LEN          256
+#define SLEEP_TIME_SEC         10
+#define USE_AESD_CHAR_DEVICE   1
+#define AESD_IOCTL_PREFIX_LEN  19
 
 #if (USE_AESD_CHAR_DEVICE)
 #define SOCKET_PATH         "/dev/aesdchar"
@@ -174,6 +176,16 @@ void *threadFunc(void* threadArg){
     syslog(LOG_ERR, "Malloc failed \r\n");
     return NULL;
   }
+  returnStatus = pthread_mutex_lock(&mutexLock);                                               // Mutex lock before write //
+  fileFd_W_R = open(SOCKET_PATH, O_RDWR | O_APPEND | O_CREAT | O_NONBLOCK, FILE_PERMISSIONS);
+  if(fileFd_W_R == STATUS_FAILURE){
+    syslog(LOG_ERR, "Open file descriptor failed \r\n");
+    myCustomExit();
+    return NULL;
+  }
+  else{
+    syslog(LOG_INFO, "File descriptor opened successfully \r\n");
+  }
   while(((bytesRcvd = recv(param->clientFd, recPacket, BUFFER_LENGTH, 0)) > 0) && (!signalCaught)){  // Receive data over socket till it is available //
     if((numBufFragments*BUFFER_LENGTH) - noOfBytesinBuffer < bytesRcvd){                           // Check if the buffer size has to be increased //
       recBuffer = (char*)realloc(recBuffer, (++numBufFragments * BUFFER_LENGTH));                  // Realloc buffer //
@@ -195,57 +207,91 @@ void *threadFunc(void* threadArg){
     }
     if (newLine){                                                                                  // New line exists //
       int bytesChanged = ind + 1;
-      returnStatus = pthread_mutex_lock(&mutexLock);                                               // Mutex lock before write //
-      if(returnStatus != STATUS_SUCCESS){
-        syslog(LOG_ERR, "Mutex Lock failed \r\n");
-        exitThread(param, recBuffer);
-        return NULL;
+      int tokensCount = 0;
+      
+      struct aesd_seekto ioctlSeekTo;
+      memset(&ioctlSeekTo, 0, sizeof(ioctlSeekTo));
+      
+      char* p = recBuffer;
+      if (strncmp(p, "AESDCHAR_IOCSEEKTO:", AESD_IOCTL_PREFIX_LEN) == 0) {
+      
+        syslog(LOG_INFO, "Received AESDCHAR_IOCSEEKTO command.\r\n");
+        p += AESD_IOCTL_PREFIX_LEN;
+        char *inputToken = strtok(p, ",");
+
+        if (inputToken != NULL) {
+          ioctlSeekTo.write_cmd = (uint32_t)strtoul(inputToken, NULL, 10);
+          tokensCount++;
+
+          inputToken = strtok(NULL, ",");
+
+          if (inputToken != NULL) {
+            ioctlSeekTo.write_cmd_offset = (uint32_t)strtoul(inputToken, NULL, 10);
+            tokensCount++;
+          }
+        }
+        if ( (tokensCount == 2)) {
+          syslog(LOG_INFO, "ioctl CMD - %d\r\n", ioctlSeekTo.write_cmd);
+          syslog(LOG_INFO, "ioctl Offset - %d\n", ioctlSeekTo.write_cmd_offset);
+          int ioctlRet = ioctl(fileFd_W_R, AESDCHAR_IOCSEEKTO, &ioctlSeekTo);
+          syslog(LOG_INFO, "ret value - %d \n", ioctlRet);
+          if(ioctlRet) {
+            syslog(LOG_ERR, "ioctl AESDCHAR_IOCSEEKTO failed.%s \r\n", strerror(errno));
+          }
+        }
       }
-      bytesPerPacket = write(fileFd_W_R, recBuffer, bytesChanged);                                 // Write the data to file Descriptor //
-      if(bytesPerPacket == STATUS_FAILURE){
-        syslog(LOG_ERR, "File write system call failed \r\n");
-        returnStatus = pthread_mutex_unlock(&mutexLock);                                           // Unlock Mutex if the write operation failed //
+      else{
+        if(returnStatus != STATUS_SUCCESS){
+          syslog(LOG_ERR, "Mutex Lock failed \r\n");
+          exitThread(param, recBuffer);
+          return NULL;
+        }
+        bytesPerPacket = write(fileFd_W_R, recBuffer, bytesChanged);                                 // Write the data to file Descriptor //
+        if(bytesPerPacket == STATUS_FAILURE){
+          syslog(LOG_ERR, "File write system call failed \r\n");
+          returnStatus = pthread_mutex_unlock(&mutexLock);                                           // Unlock Mutex if the write operation failed //
+          exitThread(param, recBuffer);
+          return NULL;
+        }
+      }
+      bytesToBeWritten += bytesPerPacket;
+      noOfBytesinBuffer -= (ind + 1);
+      bytesChanged = bytesToBeWritten;
+      trsBuffer = (char*)malloc(bytesChanged);                                                   // Allocate memory to store the read data //
+      lseek(fileFd_W_R, 0, SEEK_SET);                                                            // Set cursor to the begining of the descriptor //
+      int bytesToSend = read(fileFd_W_R, trsBuffer, bytesChanged);                               // Read the data back again from the descriptor //
+      if(bytesToSend == STATUS_FAILURE){
+        syslog(LOG_ERR, "Cannot read from file \r\n");
+        returnStatus = pthread_mutex_unlock(&mutexLock);                                         // Unlock mutex if the read operation failed //
         exitThread(param, recBuffer);
         return NULL;
       }
       else{
-        bytesToBeWritten += bytesPerPacket;
-        noOfBytesinBuffer -= (ind + 1);
-        bytesChanged = bytesToBeWritten;
-        trsBuffer = (char*)malloc(bytesChanged);                                                   // Allocate memory to store the read data //
-        lseek(fileFd_W_R, 0, SEEK_SET);                                                            // Set cursor to the begining of the descriptor //
-        int bytesToSend = read(fileFd_W_R, trsBuffer, bytesChanged);                               // Read the data back again from the descriptor //
-        if(bytesToSend == STATUS_FAILURE){
-          syslog(LOG_ERR, "Cannot read from file \r\n");
-          returnStatus = pthread_mutex_unlock(&mutexLock);                                         // Unlock mutex if the read operation failed //
+        ssize_t bytesSent = send(clientFd, trsBuffer, bytesToSend, 0);                           // Send data over socket if the read is successful //
+        if(bytesSent == STATUS_FAILURE){
+          syslog(LOG_ERR, "Send failed \r\n");
+          returnStatus = pthread_mutex_unlock(&mutexLock);                                       // Unlock mutex if the send operation failed //
           exitThread(param, recBuffer);
           return NULL;
         }
+        else if (bytesSent == bytesToSend){
+          syslog(LOG_INFO, "Data sent properly \r\n");
+        }
         else{
-          ssize_t bytesSent = send(clientFd, trsBuffer, bytesToSend, 0);                           // Send data over socket if the read is successful //
-          if(bytesSent == STATUS_FAILURE){
-            syslog(LOG_ERR, "Send failed \r\n");
-            returnStatus = pthread_mutex_unlock(&mutexLock);                                       // Unlock mutex if the send operation failed //
-            exitThread(param, recBuffer);
-            return NULL;
-          }
-          else if (bytesSent == bytesToSend){
-            syslog(LOG_INFO, "Data sent properly \r\n");
-          }
-          else{
-            syslog(LOG_ERR, "Requested Data is %d, but data sent back is only %zd \r\n",bytesToSend, bytesSent);
-          }
-          free(trsBuffer);                                                                         // Free the transmit buffer //
-          returnStatus = pthread_mutex_unlock(&mutexLock);                                         // Unlock Mutex after successful completion //
-          if(returnStatus != STATUS_SUCCESS){
-            syslog(LOG_ERR, "Mutex Unlock failed \r\n");
-            exitThread(param, recBuffer);
-            return NULL;
-          }
+          syslog(LOG_ERR, "Requested Data is %d, but data sent back is only %zd \r\n",bytesToSend, bytesSent);
+        }
+        free(trsBuffer);                                                                         // Free the transmit buffer //
+
+        if(returnStatus != STATUS_SUCCESS){
+          syslog(LOG_ERR, "Mutex Unlock failed \r\n");
+          exitThread(param, recBuffer);
+          return NULL;
         }
       }
     }
   }
+  close(fileFd_W_R);
+  returnStatus = pthread_mutex_unlock(&mutexLock);                                         // Unlock Mutex after successful completion //
   exitThread(param, recBuffer);
   return NULL;
 }
@@ -479,15 +525,7 @@ int main(int argc, char* argv[])
   }
   
   /**************************** OPEN FILE DESCRIPTOR ***************************/
-  fileFd_W_R = open(SOCKET_PATH, O_RDWR | O_APPEND | O_CREAT, FILE_PERMISSIONS);
-  if(fileFd_W_R == STATUS_FAILURE){
-    syslog(LOG_ERR, "Open file descriptor failed \r\n");
-    myCustomExit();
-    return EXIT_FAILURE;
-  }
-  else{
-    syslog(LOG_INFO, "File descriptor opened successfully \r\n");
-  }
+
   
 
   /************************** START DAEMON IF ENABLED *************************/
