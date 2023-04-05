@@ -20,12 +20,16 @@
 #include <linux/cdev.h>
 #include <linux/slab.h>
 #include <linux/fs.h> // file_operations
+#include "aesd_ioctl.h"
 #include "aesdchar.h"
 int aesd_major = 0; // use dynamic major
 int aesd_minor = 0;
 
 MODULE_AUTHOR("Vignesh Vadivel");
 MODULE_LICENSE("Dual BSD/GPL");
+
+loff_t aesd_llseek(struct file *filp, loff_t off, int whence);
+long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 
 struct aesd_dev aesd_device;
 
@@ -150,15 +154,18 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
   }
 
   // No return check for mutex unlock //
+  device->buf_size += bytesWrittenToKernelSpace;
   mutex_unlock(&device->lock);
   return bytesWrittenToKernelSpace;
 }
 struct file_operations aesd_fops = {
-    .owner = THIS_MODULE,
-    .read = aesd_read,
-    .write = aesd_write,
-    .open = aesd_open,
-    .release = aesd_release,
+  .owner = THIS_MODULE,
+  .read = aesd_read,
+  .write = aesd_write,
+  .open = aesd_open,
+  .release = aesd_release,
+  .llseek = aesd_llseek,
+  .unlocked_ioctl = aesd_ioctl,
 };
 
 static int aesd_setup_cdev(struct aesd_dev *dev){
@@ -167,11 +174,70 @@ static int aesd_setup_cdev(struct aesd_dev *dev){
   cdev_init(&dev->cdev, &aesd_fops);
   dev->cdev.owner = THIS_MODULE;
   dev->cdev.ops = &aesd_fops;
+  dev->buf_size = 0;
   err = cdev_add(&dev->cdev, devno, 1);
   if (err){
     printk(KERN_ERR "Error %d adding aesd cdev", err);
   }
   return err;
+}
+
+loff_t aesd_llseek(struct file *filp, loff_t offset, int whence)
+{
+  struct aesd_dev *dev = filp->private_data;
+
+  if (whence == SEEK_SET)
+    filp->f_pos = offset;
+  else if (whence == SEEK_CUR)
+    filp->f_pos = filp->f_pos + offset;
+  else if (whence == SEEK_END)
+    filp->f_pos = dev->buf_size - offset;
+  else
+    return -EINVAL;
+
+  if (filp->f_pos < 0)
+    return -EINVAL;
+  
+  if (filp->f_pos > dev->buf_size)
+    return -EINVAL;
+  return filp->f_pos;
+}
+
+long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+  struct aesd_dev *dev = filp->private_data;
+  loff_t locOffset = 0;
+  struct aesd_seekto seekToCmd;
+  struct aesd_buffer_entry *entry;
+  uint32_t index = 0;
+  long retval = 0;
+  
+  if (cmd == AESDCHAR_IOCSEEKTO)
+    {
+      retval = copy_from_user(&seekToCmd, (struct aesd_seekto __user *)arg, sizeof(struct aesd_seekto));
+
+      if ((seekToCmd.write_cmd > AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) || (seekToCmd.write_cmd < 0) ){
+        retval = -EINVAL;
+        return retval;
+      }
+      
+      while( index < seekToCmd.write_cmd) {
+        entry = &dev->circle_buff.entry[index];
+        if ((entry->size > 0) && (entry->buffptr != NULL))
+          locOffset += entry->size;
+        ++index;
+      }
+      entry = &dev->circle_buff.entry[seekToCmd.write_cmd];
+      if ((entry->size > 0) && (entry->buffptr != NULL)){
+        if (seekToCmd.write_cmd_offset > entry->size) {   // Return EINVAL if the offset is greater than size //
+          retval = -EINVAL;
+          return retval;
+        }
+        locOffset += seekToCmd.write_cmd_offset;
+      } 
+      filp->f_pos = locOffset;                            // Update Offset //
+    }
+  return retval;
 }
 
 int aesd_init_module(void){

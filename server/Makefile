@@ -8,6 +8,7 @@ CC ?= $(CROSS_COMPILE)gcc
  # Flags to treat all the errors as warnings
 CFLAGS ?= -g -Wall -Werror
 LDFLAGS ?= -pthread -lrt
+INCLUDES = -I../aesd-char-driver
 
 # writer recipe
 .PHONY : all
@@ -19,7 +20,7 @@ aesdsocket: aesdsocket_o
 
 # Compiling the source files to generate object files
 aesdsocket_o:
-	$(CC) $(CFLAGS) -c aesdsocket.c -o aesdsocket.o
+	$(CC) $(CFLAGS) $(INCLUDES) -c aesdsocket.c -o aesdsocket.o 
 
 # Clean the working directory
 .PHONY: clean
